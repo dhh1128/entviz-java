@@ -1,0 +1,109 @@
+name: Release
+
+# Tag-triggered publish to Maven Central via the Sonatype Central Portal.
+# A human maintainer bumps the version (pom.xml + the LIB_VERSION constant in
+# Core.java), commits, then tags `vX.Y.Z` and pushes. This workflow re-runs the
+# FULL gate (mvn verify + Tier-A/B conformance — mirroring ci.yml so a
+# direct-push tag can never ship an artifact that would have failed CI),
+# verifies the tag matches the POM version, then deploys the signed artifact.
+# Actions are pinned by node24 commit SHA, matching ci.yml. No untrusted
+# github.event.* data is interpolated (only the trusted tag ref
+# GITHUB_REF_NAME, which only a maintainer who can push tags controls).
+on:
+  push:
+    tags:
+      - "v*"
+
+# Least privilege: read-only by default. contents:write is granted ONLY to the
+# publish job (which creates the GitHub release); the gate/conformance jobs run
+# with no write access.
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: build + test (JDK 21)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165  # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify tag matches POM version
+        run: |
+          set -euo pipefail
+          pom=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          tag="${GITHUB_REF_NAME#v}"
+          echo "POM version: ${pom}; tag: ${tag}"
+          if [ "${pom}" != "${tag}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match POM version ${pom}"
+            exit 1
+          fi
+      - name: Gate (mvn verify)
+        run: mvn -B clean verify
+
+  conformance:
+    name: Tier-A/B conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Check out the entviz reference (spec + corpus)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          repository: dhh1128/entviz
+          path: entviz-ref
+          persist-credentials: false
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165  # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build the classes
+        run: mvn -B -q clean compile
+      - name: Install the conformance harness (lxml only)
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/harness
+          /tmp/harness/bin/pip install --quiet --upgrade pip
+          /tmp/harness/bin/pip install --quiet lxml
+      - name: Conformance (hard gate)
+        run: |
+          set -euo pipefail
+          ( cd entviz-ref \
+            && PYTHONPATH=src:. /tmp/harness/bin/python -m compliance.runner \
+                 --impl-cmd "${GITHUB_WORKSPACE}/bin/entviz-conformance" --tiers AB )
+
+  publish:
+    name: publish to Maven Central
+    needs: [gate, conformance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      # setup-java wires the Central Portal server credentials into settings.xml
+      # (server id "central") and imports the GPG signing key for maven-gpg-plugin.
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165  # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          server-id: central
+          server-username: CENTRAL_TOKEN_USERNAME
+          server-password: CENTRAL_TOKEN_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Deploy (release profile -> Central Portal)
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: mvn -B -Prelease -DskipTests deploy

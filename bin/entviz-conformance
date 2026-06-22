@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Conformance CLI wrapper: reads one vector's JSON on stdin, writes SVG to
+# stdout, exits non-zero on rejection. Used by the entviz Python runner via
+# --impl-cmd. Resolves the JDK in priority order: ENTVIZ_JAVA_HOME (CI sets this
+# from the runner's JAVA_HOME), then a JAVA_HOME on the environment, then a
+# `java` on PATH. Requires JDK 21+; run `mvn -q compile` first so target/classes
+# exists.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+HOME_DIR="${ENTVIZ_JAVA_HOME:-${JAVA_HOME:-}}"
+JAVA="${HOME_DIR:+$HOME_DIR/bin/}java"
+exec "$JAVA" -cp "$ROOT/target/classes" io.github.dhh1128.entviz.cli.Conformance

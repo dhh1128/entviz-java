@@ -1,0 +1,19 @@
+# Maven build output
+target/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS / editor cruft
+.DS_Store
+*.log
+
+# tick ledger working files
+/.tick
+.tick.lock
+.ai-safety-check.*

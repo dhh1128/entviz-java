@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Third-party actions are pinned by full commit SHA (node24-runtime versions).
+# A mutable tag like @v5 can be silently retargeted; the `# vN` comment records
+# the human-readable version the SHA corresponds to.
+jobs:
+  build:
+    name: build + test (JDK 21)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165  # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build + test (mvn verify)
+        run: mvn -B clean verify
+
+  conformance:
+    name: spec-sync + Tier-A/B conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      # The entviz reference repo carries the algorithm spec, SPEC_VERSION, and
+      # the golden conformance corpus this artifact is certified against.
+      - name: Check out the entviz reference (spec + corpus)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          repository: dhh1128/entviz
+          path: entviz-ref
+          persist-credentials: false
+
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165  # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build the classes
+        run: mvn -B -q clean compile
+
+      - name: Install the conformance harness (lxml only)
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/harness
+          /tmp/harness/bin/pip install --quiet --upgrade pip
+          /tmp/harness/bin/pip install --quiet lxml
+
+      # Tier A (render model) + Tier B (canonical raster, text excluded) +
+      # error-rejection vectors. This both PROVES conformance and SURFACES spec
+      # drift: when the reference spec is ahead of this artifact we warn loudly
+      # but do not block unrelated PRs; when versions match (or this artifact is
+      # ahead) it is a hard gate. Only trusted workspace paths are interpolated.
+      - name: Spec-version sync check + conformance
+        env:
+          ENTVIZ_JAVA_HOME: ${{ env.JAVA_HOME }}
+        run: |
+          set -euo pipefail
+          ours=$(grep -oP 'SPEC_VERSION = "\Kv[0-9]+' src/main/java/io/github/dhh1128/entviz/Core.java)
+          ref=$(grep -oP 'SPEC_VERSION = "\Kv[0-9]+' entviz-ref/src/entviz/__init__.py)
+          echo "entviz-java targets spec ${ours}; reference impl/spec is ${ref}"
+          run_conformance() {
+            ( cd entviz-ref \
+              && PYTHONPATH=src:. /tmp/harness/bin/python -m compliance.runner \
+                   --impl-cmd "${GITHUB_WORKSPACE}/bin/entviz-conformance" --tiers AB )
+          }
+          if [ "${ours}" = "${ref}" ]; then
+            echo "Spec versions match — conformance is a hard gate."
+            run_conformance
+          else
+            echo "::warning title=Spec drift::reference impl/spec is ${ref} but entviz-java targets ${ours} — an upgrade is needed"
+            if [ "${ref#v}" -gt "${ours#v}" ]; then
+              echo "Reference is AHEAD; the corpus run is informational while this artifact catches up."
+              run_conformance || echo "::warning title=Conformance::failed against the newer reference corpus (expected while behind)"
+            else
+              echo "This artifact is ahead of the reference — hard gate."
+              run_conformance
+            fi
+          fi
