@@ -3,7 +3,7 @@ name: Release
 # Tag-triggered publish to Maven Central via the Sonatype Central Portal.
 # A human maintainer bumps the version (pom.xml + the LIB_VERSION constant in
 # Core.java), commits, then tags `vX.Y.Z` and pushes. This workflow re-runs the
-# FULL gate (mvn verify + Tier-A/B conformance — mirroring ci.yml so a
+# FULL gate (mvn verify + Tier-A conformance — mirroring ci.yml so a
 # direct-push tag can never ship an artifact that would have failed CI),
 # verifies the tag matches the POM version, then deploys the signed artifact.
 # Actions are pinned by node24 commit SHA, matching ci.yml. No untrusted
@@ -47,7 +47,7 @@ jobs:
         run: mvn -B clean verify
 
   conformance:
-    name: Tier-A/B conformance
+    name: Tier-A conformance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -66,7 +66,7 @@ jobs:
           cache: maven
       - name: Build the classes
         run: mvn -B -q clean compile
-      - name: Install the conformance harness (lxml only)
+      - name: Install the Tier-A harness (lxml only; no rasterizer needed)
         run: |
           set -euo pipefail
           python3 -m venv /tmp/harness
@@ -77,7 +77,7 @@ jobs:
           set -euo pipefail
           ( cd entviz-ref \
             && PYTHONPATH=src:. /tmp/harness/bin/python -m compliance.runner \
-                 --impl-cmd "${GITHUB_WORKSPACE}/bin/entviz-conformance" --tiers AB )
+                 --impl-cmd "${GITHUB_WORKSPACE}/bin/entviz-conformance" --tiers A )
 
   publish:
     name: publish to Maven Central

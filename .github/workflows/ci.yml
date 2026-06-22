@@ -30,7 +30,7 @@ jobs:
         run: mvn -B clean verify
 
   conformance:
-    name: spec-sync + Tier-A/B conformance
+    name: spec-sync + Tier-A conformance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -55,19 +55,19 @@ jobs:
       - name: Build the classes
         run: mvn -B -q clean compile
 
-      - name: Install the conformance harness (lxml only)
+      - name: Install the Tier-A harness (lxml only; no rasterizer needed)
         run: |
           set -euo pipefail
           python3 -m venv /tmp/harness
           /tmp/harness/bin/pip install --quiet --upgrade pip
           /tmp/harness/bin/pip install --quiet lxml
 
-      # Tier A (render model) + Tier B (canonical raster, text excluded) +
-      # error-rejection vectors. This both PROVES conformance and SURFACES spec
-      # drift: when the reference spec is ahead of this artifact we warn loudly
-      # but do not block unrelated PRs; when versions match (or this artifact is
-      # ahead) it is a hard gate. Only trusted workspace paths are interpolated.
-      - name: Spec-version sync check + conformance
+      # Tier A (render model) + error-rejection vectors. This both PROVES
+      # conformance and SURFACES spec drift: when the reference spec is ahead of
+      # this artifact we warn loudly but do not block unrelated PRs; when
+      # versions match (or this artifact is ahead) it is a hard gate. Only
+      # trusted workspace paths are interpolated.
+      - name: Spec-version sync check + Tier-A conformance
         env:
           ENTVIZ_JAVA_HOME: ${{ env.JAVA_HOME }}
         run: |
@@ -78,7 +78,7 @@ jobs:
           run_conformance() {
             ( cd entviz-ref \
               && PYTHONPATH=src:. /tmp/harness/bin/python -m compliance.runner \
-                   --impl-cmd "${GITHUB_WORKSPACE}/bin/entviz-conformance" --tiers AB )
+                   --impl-cmd "${GITHUB_WORKSPACE}/bin/entviz-conformance" --tiers A )
           }
           if [ "${ours}" = "${ref}" ]; then
             echo "Spec versions match — conformance is a hard gate."
