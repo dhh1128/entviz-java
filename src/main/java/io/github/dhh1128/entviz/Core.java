@@ -24,10 +24,10 @@ final class Core {
     }
 
     /** The entviz spec level this library implements. */
-    static final String SPEC_VERSION = "v10";
+    static final String SPEC_VERSION = "v11";
 
     /** This module's own version stamp (not compared by the conformance checker). */
-    static final String LIB_VERSION = "0.10.0";
+    static final String LIB_VERSION = "0.11.0";
 
     /** The fixed palette; indices 0-3 are background candidates, black (4) is always an edge color. */
     static final String[] POSSIBLE_EDGE_COLORS = {"#ffffff", "#e7be00", "#ff3f2f", "#2f3fbf", "#000000"};

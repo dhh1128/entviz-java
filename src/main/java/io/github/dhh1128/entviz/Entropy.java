@@ -3,6 +3,8 @@ package io.github.dhh1128.entviz;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Format-specific entropy parsing (port of {@code entropy.py} via
@@ -23,6 +25,15 @@ final class Entropy {
     static final String BASE58_CHARS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     static final String BECH32_CHARS = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
     static final String BASE32_CHARS_UP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+    /** W3C DID: {@code did:<method>:<method-specific-id>} with an optional DID-URL tail. */
+    private static final Pattern DID_REGEX =
+            Pattern.compile("^did:([a-z0-9]+):([A-Za-z0-9._%:-]+)(?:[/?#].*)?$");
+
+    /** RFC 8141 URN: {@code urn:<NID>:<NSS>} with optional r-/q-/f-components. */
+    private static final Pattern URN_REGEX =
+            Pattern.compile("^urn:([A-Za-z0-9][A-Za-z0-9-]{0,31}):([^?#]+)(?:[?#].*)?$",
+                    Pattern.CASE_INSENSITIVE);
 
     // ---- char-class helpers ----------------------------------------------
 
@@ -630,6 +641,49 @@ final class Entropy {
         return rem == 1;
     }
 
+    // ---- DID / URN -------------------------------------------------------
+
+    /**
+     * Parses a W3C DID (or DID URL): {@code did:<method>:<method-specific-id>}.
+     *
+     * <p>The method name is IDENTITY (bound by PREFIX-FOLD via the semantic
+     * prefix {@code did:<method>:}); the method-specific-id is the core, kept
+     * VERBATIM (not percent-decoded, not case-folded) and tokenized as
+     * base64url. Any DID-URL tail ({@code /path}, {@code ?query}, {@code #frag})
+     * is a free annotation and is DROPPED.
+     */
+    static Parsed parseDid(String text) {
+        if (text.isEmpty()) {
+            return null;
+        }
+        Matcher m = DID_REGEX.matcher(text);
+        if (!m.matches()) {
+            return null;
+        }
+        String prefix = "did:" + m.group(1) + ":";
+        return Parsed.of("", Alphabet.BASE64URL, prefix, m.group(2), null).semantic();
+    }
+
+    /**
+     * Parses an RFC 8141 URN: {@code urn:<NID>:<NSS>}.
+     *
+     * <p>The scheme + NID are case-INSENSITIVE: the {@code urn:<nid>:} prefix is
+     * LOWERCASED (and bound by PREFIX-FOLD), while the NSS core case is
+     * PRESERVED. The NSS keeps internal {@code :} and {@code /} and ends only at
+     * a {@code ?} or {@code #} component, which is DROPPED.
+     */
+    static Parsed parseUrn(String text) {
+        if (text.isEmpty()) {
+            return null;
+        }
+        Matcher m = URN_REGEX.matcher(text);
+        if (!m.matches()) {
+            return null;
+        }
+        String prefix = "urn:" + m.group(1).toLowerCase(Locale.ROOT) + ":";
+        return Parsed.of("", Alphabet.BASE64URL, prefix, m.group(2), null).semantic();
+    }
+
     // ---- SWHID / gitoid --------------------------------------------------
 
     static Parsed parseSwhid(String text) {
@@ -992,6 +1046,8 @@ final class Entropy {
             Entropy::parseUlid,
             Entropy::parseSnowflake,
             Entropy::parseLei,
+            Entropy::parseDid,
+            Entropy::parseUrn,
             Entropy::parseSwhid,
             Entropy::parseGitoid,
             Entropy::parseBech32Address,

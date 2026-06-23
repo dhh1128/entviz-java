@@ -114,4 +114,92 @@ class EntropyTest {
             assertEquals(18, p.core().length());
         }
     }
+
+    // ---- DID -------------------------------------------------------------
+
+    @Test
+    void didWebBasic() {
+        Parsed p = Entropy.parse("did:web:example.com");
+        assertNotNull(p);
+        assertEquals("", p.typeName());
+        assertEquals("did:web:", p.prefix());
+        assertEquals("example.com", p.core());
+        assertTrue(p.prefixSemantic());
+    }
+
+    @Test
+    void didMethodSpecificIdKeepsColons() {
+        // The msid MAY contain `:` and is kept verbatim.
+        Parsed p = Entropy.parse("did:web:example.com:user:alice");
+        assertNotNull(p);
+        assertEquals("did:web:", p.prefix());
+        assertEquals("example.com:user:alice", p.core());
+        assertTrue(p.prefixSemantic());
+    }
+
+    @Test
+    void didUrlTailDropped() {
+        // A `/path?q#frag` DID-URL tail is dropped; core is the bare msid.
+        Parsed bare = Entropy.parse("did:web:example.com:user:alice");
+        Parsed tailed = Entropy.parse("did:web:example.com:user:alice/path?q=1#frag");
+        assertNotNull(bare);
+        assertNotNull(tailed);
+        assertEquals(bare.core(), tailed.core());
+        assertEquals("example.com:user:alice", tailed.core());
+        assertEquals("did:web:", tailed.prefix());
+    }
+
+    @Test
+    void didKeyFragmentDropped() {
+        Parsed p = Entropy.parse(
+                "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK"
+                + "#z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK");
+        assertNotNull(p);
+        assertEquals("did:key:", p.prefix());
+        assertEquals("z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK", p.core());
+        assertTrue(p.prefixSemantic());
+    }
+
+    // ---- URN -------------------------------------------------------------
+
+    @Test
+    void urnIsbnBasic() {
+        Parsed p = Entropy.parse("urn:isbn:0451450523");
+        assertNotNull(p);
+        assertEquals("", p.typeName());
+        assertEquals("urn:isbn:", p.prefix());
+        assertEquals("0451450523", p.core());
+        assertTrue(p.prefixSemantic());
+    }
+
+    @Test
+    void urnSchemeAndNidLowercasedNssPreserved() {
+        // urn scheme + NID are case-insensitive (prefix lowercased); NSS preserved.
+        Parsed p = Entropy.parse("URN:ISBN:0451450523X");
+        assertNotNull(p);
+        assertEquals("urn:isbn:", p.prefix());
+        assertEquals("0451450523X", p.core());
+        assertTrue(p.prefixSemantic());
+    }
+
+    @Test
+    void urnNssKeepsSlash() {
+        Parsed p = Entropy.parse("urn:example:foo/bar/baz");
+        assertNotNull(p);
+        assertEquals("urn:example:", p.prefix());
+        assertEquals("foo/bar/baz", p.core());
+        assertTrue(p.prefixSemantic());
+    }
+
+    @Test
+    void urnComponentsDropped() {
+        // r-/q-/f-components (after `?` or `#`) are dropped.
+        Parsed bare = Entropy.parse("urn:example:foo/bar");
+        Parsed comp = Entropy.parse("urn:example:foo/bar?=resolve#frag");
+        assertNotNull(bare);
+        assertNotNull(comp);
+        assertEquals(bare.core(), comp.core());
+        assertEquals("foo/bar", comp.core());
+        assertEquals("urn:example:", comp.prefix());
+    }
 }
