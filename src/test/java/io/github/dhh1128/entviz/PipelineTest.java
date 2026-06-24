@@ -143,7 +143,7 @@ class PipelineTest {
     @Test
     void renderIncludesVersionStamps() {
         String svg = Entviz.render("deadbeef");
-        assertTrue(svg.contains("data-entviz-version=\"v10\""));
+        assertTrue(svg.contains("data-entviz-version=\"" + Entviz.SPEC_VERSION + "\""));
         assertTrue(svg.contains("data-entviz-lib=\"" + Entviz.LIB_VERSION + "\""));
     }
 
