@@ -25,6 +25,8 @@ final class Pipeline {
     }
 
     private static final double DPI = 96.0;
+    /** Transparent quiet ring (user units) around the frame so it never sits on the canvas edge. */
+    private static final double MARGIN = 1.0;
     private static final int NOTE_MAX_LEN = 10;
     private static final int MAX_INPUT_CHARS = 65536;
     private static final String MONOSPACE_FONT_FAMILY =
@@ -179,13 +181,15 @@ final class Pipeline {
         double gridW = cellW * grid.cols();
         double gridH = cellH * grid.rows();
 
-        double boundingW = 1.0 + barW + 1.0 + gm + gridW + gm + 1.0;
+        double innerW = 1.0 + barW + 1.0 + gm + gridW + gm + 1.0;
         boolean hasBottomLabel = suffix != null || sanitized != null;
         double bottomRegion = hasBottomLabel ? nucleusH + gm : gm;
-        double boundingH = 1.0 + gm + nucleusH + gridH + bottomRegion + 1.0;
+        double innerH = 1.0 + gm + nucleusH + gridH + bottomRegion + 1.0;
+        double boundingW = innerW + 2.0 * MARGIN;
+        double boundingH = innerH + 2.0 * MARGIN;
 
-        double gridLeft = 1.0 + barW + 1.0 + gm;
-        double gridTop = 1.0 + gm + nucleusH;
+        double gridLeft = MARGIN + 1.0 + barW + 1.0 + gm;
+        double gridTop = MARGIN + 1.0 + gm + nucleusH;
         double gridRight = gridLeft + gridW;
         double gridBottom = gridTop + gridH;
 
@@ -253,9 +257,10 @@ final class Pipeline {
                 .append(n(gridLeft)).append("\" y=\"").append(n(gridTop)).append("\" width=\"")
                 .append(n(gridW)).append("\" height=\"").append(n(gridH)).append("\"/></clipPath></defs>");
 
-        // bounding white background
-        s.append("<rect x=\"0\" y=\"0\" width=\"").append(n(boundingW)).append("\" height=\"")
-                .append(n(boundingH)).append("\" fill=\"#ffffff\"/>");
+        // bounding white background (inner field only; outer MARGIN ring stays transparent)
+        s.append("<rect x=\"").append(n(MARGIN)).append("\" y=\"").append(n(MARGIN))
+                .append("\" width=\"").append(n(boundingW - 2.0 * MARGIN)).append("\" height=\"")
+                .append(n(boundingH - 2.0 * MARGIN)).append("\" fill=\"#ffffff\"/>");
 
         // grid channel
         s.append("<g data-channel=\"grid\">");
@@ -523,11 +528,11 @@ final class Pipeline {
                 typeName, prefix, suffix, labelTextPx, truncatedBytes, sanitized);
 
         // borders
-        appendBorderLine(s, 0.0, 0.5, boundingW, 0.5);
-        appendBorderLine(s, boundingW - 0.5, 0.0, boundingW - 0.5, boundingH);
-        appendBorderLine(s, 0.0, boundingH - 0.5, boundingW, boundingH - 0.5);
-        appendBorderLine(s, 0.5, 0.0, 0.5, boundingH);
-        appendBorderLine(s, 1.0 + barW + 0.5, 0.0, 1.0 + barW + 0.5, boundingH);
+        appendBorderLine(s, MARGIN, MARGIN + 0.5, boundingW - MARGIN, MARGIN + 0.5);
+        appendBorderLine(s, boundingW - MARGIN - 0.5, MARGIN, boundingW - MARGIN - 0.5, boundingH - MARGIN);
+        appendBorderLine(s, MARGIN, boundingH - MARGIN - 0.5, boundingW - MARGIN, boundingH - MARGIN - 0.5);
+        appendBorderLine(s, MARGIN + 0.5, MARGIN, MARGIN + 0.5, boundingH - MARGIN);
+        appendBorderLine(s, MARGIN + 1.0 + barW + 0.5, MARGIN, MARGIN + 1.0 + barW + 0.5, boundingH - MARGIN);
 
         s.append("</svg>");
         return s.toString();
@@ -691,9 +696,9 @@ final class Pipeline {
 
     private static void drawColorBar(StringBuilder s, byte[] digest, byte[] second, VisualStyle style,
             double barW, double boundingH, double cellTextPx) {
-        double barLeft = 1.0;
-        double barTop = 1.0;
-        double barHeight = boundingH - 2.0;
+        double barLeft = MARGIN + 1.0;
+        double barTop = MARGIN + 1.0;
+        double barHeight = boundingH - 2.0 * MARGIN - 2.0;
         int[] counts = Core.twoBitCounts(digest);
         List<String> edge = style.edgeColors();
         int[] order = firstAppearance(digest);
