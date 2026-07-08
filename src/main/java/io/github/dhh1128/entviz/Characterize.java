@@ -41,25 +41,9 @@ final class Characterize {
     static final String ROLE_ADDRESS = "address";
     static final String ROLE_IDENTIFIER = "identifier";
 
-    /**
-     * The structured 8-field characterization. Field names mirror {@code
-     * characterize.py}. {@code scheme} and {@code role} are null when absent.
-     * {@code qualifiers} preserves insertion order; values are String or Integer.
-     */
-    record Model(
-            String encoding,
-            String scheme,
-            String role,
-            Map<String, Object> qualifiers,
-            String sizeBasis,
-            long sizeBits,
-            List<Part> parts,
-            String entropyType) {
-    }
-
-    /** An ordered [{text, bind}] part; {@code bind} in {none, fold, core}. */
-    record Part(String text, String bind) {
-    }
+    // The public 8-field characterization and its ordered [{text, bind}] Part
+    // are top-level public types (see Characterization.java, Part.java) so the
+    // structured recognition is reachable through Entviz#characterize(String).
 
     // Non-power-of-2 alphabets whose true density is below the token-packing
     // bits_per_char convention. For these, sizeBits decodes the core as a big
@@ -297,11 +281,11 @@ final class Characterize {
      * @param parsed the parse record for {@code raw}, or null for the UTF-8 fallback
      * @param fallbackCore the base64url encoding of the raw UTF-8 bytes (fallback core)
      */
-    static Model characterize(String raw, Parsed parsed, String fallbackCore) {
+    static Characterization characterize(String raw, Parsed parsed, String fallbackCore) {
         if (parsed == null) {
             List<Part> parts = new ArrayList<>();
             parts.add(new Part(fallbackCore, "core"));
-            return new Model(
+            return new Characterization(
                     Alphabet.BASE64URL.name(),
                     null,
                     null,
@@ -315,7 +299,7 @@ final class Characterize {
         long bits = sizeBits(parsed.core(), parsed.alphabet(), d.sizeBasis());
         String encoding = parsed.alphabet().name();
         String entropyType = d.scheme() != null ? d.scheme() : encoding;
-        return new Model(
+        return new Characterization(
                 encoding,
                 d.scheme(),
                 d.role(),

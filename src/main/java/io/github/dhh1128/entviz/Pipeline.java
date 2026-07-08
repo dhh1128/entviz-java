@@ -92,6 +92,29 @@ final class Pipeline {
         return s;
     }
 
+    // ---- characterize (structured, no render) ----------------------------
+
+    /**
+     * Parses {@code entropyText} and returns its structured characterization,
+     * reusing the exact strip / input-length / parse prelude that {@link
+     * #render} performs. See {@link Entviz#characterize(String)}.
+     */
+    static Characterization characterize(String entropyText) {
+        if (entropyText.codePointCount(0, entropyText.length()) > MAX_INPUT_CHARS) {
+            throw new RenderException(RenderException.Kind.INPUT_TOO_LONG, "input too long");
+        }
+        String rawInput = entropyText.strip();
+        Parsed parsed;
+        try {
+            parsed = Entropy.parse(rawInput);
+        } catch (Eip55Exception e) {
+            throw new Eip55RenderException(e.position());
+        }
+        String fallbackCore =
+                Core.b64urlEncode(rawInput.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return Characterize.characterize(rawInput, parsed, fallbackCore);
+    }
+
     // ---- main render -----------------------------------------------------
 
     static String render(String entropyText, double targetAr, double fontSizePt, String note) {
@@ -241,7 +264,7 @@ final class Pipeline {
         // v13 entropy characterization: reporting-only structured fields emitted
         // as root data-* attributes (no ink). Null scheme/role -> empty string;
         // qualifiers/parts as compact JSON (XML-escaped). See Characterize.
-        Characterize.Model ch = Characterize.characterize(rawInput, parsed, fallbackCore);
+        Characterization ch = Characterize.characterize(rawInput, parsed, fallbackCore);
         StringBuilder chAttrs = new StringBuilder();
         chAttrs.append(" data-encoding=\"").append(escAttr(ch.encoding()))
                 .append("\" data-scheme=\"").append(escAttr(ch.scheme() == null ? "" : ch.scheme()))

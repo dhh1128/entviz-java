@@ -51,4 +51,26 @@ public final class Entviz {
     public static String render(String entropy, RenderOptions opts) {
         return Pipeline.render(entropy, opts.targetAspectRatio(), opts.fontSizePt(), opts.note());
     }
+
+    /**
+     * Characterizes {@code entropy} into the structured {@link Characterization}
+     * (spec v13) without rendering. The eight fields are the same reporting-only
+     * recognition {@link #render(String)} emits as {@code data-*} attributes;
+     * this API exposes them directly, matching the public {@code characterize}
+     * surface of the sibling implementations (entviz-rs, entviz-js, entviz-go,
+     * and the reference {@code characterize.py}).
+     *
+     * <p>Never errors for an in-range input: an unrecognized input falls back to
+     * the UTF-8 &rarr; base64url path ({@code scheme=null}, {@code role=null},
+     * {@code sizeBasis="utf8"}, size measured over the original input bytes). A
+     * hard parse error (an invalid EIP-55 checksum) is propagated as a
+     * {@link RenderException}, matching the reference contract.
+     *
+     * @param entropy the entropy string to characterize
+     * @return the eight-field structured characterization
+     * @throws RenderException if the input is out of range or rejected (EIP-55)
+     */
+    public static Characterization characterize(String entropy) {
+        return Pipeline.characterize(entropy);
+    }
 }

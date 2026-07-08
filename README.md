@@ -76,14 +76,29 @@ names the first mismatched-case position via `position()`).
 
 ### Entropy characterization
 
-Every rendered SVG carries the structured [entropy characterization](https://dhh1128.github.io/entviz/integration-guide/#the-characterization-model)
-on its root `<svg>` element as `data-*` attributes (`data-encoding`,
-`data-scheme`, `data-role`, `data-qualifiers`, `data-size-basis`,
-`data-size-bits`, `data-parts`, `data-entropy-type`). The Java port exposes the
-characterization through those attributes rather than a public `characterize`
-function — parse the returned SVG (e.g. with your XML reader of choice) and read
-them off the root element. For the field-by-field model and how the other four
-languages expose it directly, see the
+Call `characterize` to get the structured [entropy characterization](https://dhh1128.github.io/entviz/integration-guide/#the-characterization-model)
+directly, without rendering:
+
+```java
+import io.github.dhh1128.entviz.Entviz;
+import io.github.dhh1128.entviz.Characterization;
+
+Characterization c = Entviz.characterize("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK");
+c.scheme();      // "did"
+c.role();        // "identifier"
+c.qualifiers();  // {method=key}
+c.sizeBits();    // reporting-only size in bits
+```
+
+`Characterization` is a record with public accessors for all eight fields:
+`encoding`, `scheme`, `role`, `qualifiers`, `sizeBasis`, `sizeBits`, `parts`,
+and `entropyType` (`scheme` and `role` are `null` when absent). This mirrors the
+public `characterize` surface of the other four implementations. The same eight
+fields are also emitted onto every rendered SVG's root `<svg>` element as
+`data-*` attributes (`data-encoding`, `data-scheme`, `data-role`,
+`data-qualifiers`, `data-size-basis`, `data-size-bits`, `data-parts`,
+`data-entropy-type`) if you would rather read them off the SVG. For the
+field-by-field model, see the
 [Developer Integration Guide](https://dhh1128.github.io/entviz/integration-guide/).
 
 ## Build + test
