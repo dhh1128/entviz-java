@@ -121,8 +121,9 @@ final class Pipeline {
         String suffix = null;
         boolean prefixSemantic = false;
 
+        String fallbackCore = Core.b64urlEncode(rawInput.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         if (parsed == null) {
-            core = Core.b64urlEncode(rawInput.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            core = fallbackCore;
             typeName = "txt(" + rawInput.codePointCount(0, rawInput.length()) + ")->b64url";
             alphabet = Alphabet.BASE64URL;
         } else {
@@ -236,6 +237,22 @@ final class Pipeline {
         StringBuilder s = new StringBuilder(8192);
 
         String truncAttr = isTruncated ? " data-truncated=\"true\"" : "";
+
+        // v13 entropy characterization: reporting-only structured fields emitted
+        // as root data-* attributes (no ink). Null scheme/role -> empty string;
+        // qualifiers/parts as compact JSON (XML-escaped). See Characterize.
+        Characterize.Model ch = Characterize.characterize(rawInput, parsed, fallbackCore);
+        StringBuilder chAttrs = new StringBuilder();
+        chAttrs.append(" data-encoding=\"").append(escAttr(ch.encoding()))
+                .append("\" data-scheme=\"").append(escAttr(ch.scheme() == null ? "" : ch.scheme()))
+                .append("\" data-role=\"").append(escAttr(ch.role() == null ? "" : ch.role()))
+                .append("\" data-size-basis=\"").append(escAttr(ch.sizeBasis()))
+                .append("\" data-entropy-type=\"").append(escAttr(ch.entropyType()))
+                .append("\" data-size-bits=\"").append(ch.sizeBits())
+                .append("\" data-qualifiers=\"").append(escAttr(Characterize.qualifiersJson(ch.qualifiers())))
+                .append("\" data-parts=\"").append(escAttr(Characterize.partsJson(ch.parts())))
+                .append('"');
+
         s.append("<svg width=\"").append(n(boundingW)).append("\" height=\"").append(n(boundingH))
                 .append("\" viewBox=\"0 0 ").append(n(boundingW)).append(' ').append(n(boundingH))
                 .append("\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"")
@@ -245,7 +262,7 @@ final class Pipeline {
                 .append("\" data-input-bytes=\"").append(rawInputBytes)
                 .append("\" data-cols=\"").append(grid.cols())
                 .append("\" data-rows=\"").append(grid.rows())
-                .append('"').append(truncAttr).append('>');
+                .append('"').append(truncAttr).append(chAttrs).append('>');
 
         // defs + clipPath
         StringBuilder digestHexB = new StringBuilder();
