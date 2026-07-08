@@ -74,6 +74,18 @@ ASCII (U+0020–U+007E) or longer than 10 code points, and Ethereum addresses
 whose EIP-55 mixed-case checksum is invalid (the `Eip55RenderException` subtype
 names the first mismatched-case position via `position()`).
 
+### Entropy characterization
+
+Every rendered SVG carries the structured [entropy characterization](https://dhh1128.github.io/entviz/integration-guide/#the-characterization-model)
+on its root `<svg>` element as `data-*` attributes (`data-encoding`,
+`data-scheme`, `data-role`, `data-qualifiers`, `data-size-basis`,
+`data-size-bits`, `data-parts`, `data-entropy-type`). The Java port exposes the
+characterization through those attributes rather than a public `characterize`
+function — parse the returned SVG (e.g. with your XML reader of choice) and read
+them off the root element. For the field-by-field model and how the other four
+languages expose it directly, see the
+[Developer Integration Guide](https://dhh1128.github.io/entviz/integration-guide/).
+
 ## Build + test
 
 Requires **JDK 21** and Maven.
