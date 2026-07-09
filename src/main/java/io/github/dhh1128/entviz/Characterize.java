@@ -274,6 +274,211 @@ final class Characterize {
         return parts;
     }
 
+    // ---- Label projection (spec v14) ----------------------------------------
+    //
+    // The visible top/bottom label strips are a PURE PROJECTION of the eight
+    // characterization fields through one grammar — no per-parser string fusing.
+    // Every implementation renders the same strips by running this same
+    // projection over the shared fields.
+    //
+    //   top    = [fingerprint of ]PRIMARY[, MOD]...[, SIZE]
+    //   bottom = ...<suffix>[ (<note>)]
+    //
+    // Slot separator is ", " (comma-space); no trailing ':' or '...'. See
+    // reviews/v14-label-redesign.md and characterize.py render_label.
+
+    // Bare-encoding display shortenings for the PRIMARY slot when scheme is null
+    // and the basis is decoded (the encoding name IS the primary). Mirrors the
+    // pre-v14 pipeline renaming base64->b64, base64url->b64url; the other
+    // alphabet names show verbatim.
+    private static String encodingPrimary(String enc) {
+        return switch (enc) {
+            case "base64" -> "b64";
+            case "base64url" -> "b64url";
+            default -> enc;
+        };
+    }
+
+    // scheme -> visible PRIMARY short-name for the non-self-describing schemes.
+    private static String schemePrimaryShort(String scheme) {
+        return switch (scheme) {
+            case "eth" -> "ETH";
+            case "btc" -> "BTC";
+            case "ltc" -> "LTC";
+            case "bch" -> "BCH";
+            case "ada" -> "ADA";
+            case "xrp" -> "XRP";
+            case "stellar" -> "XLM";
+            case "eos" -> "EOS";
+            case "uuid" -> "UUID";
+            case "ulid" -> "ULID";
+            case "lei" -> "LEI";
+            case "snowflake" -> "snowflake";
+            case "ssh" -> "SSH";
+            case "cesr" -> "CESR";
+            case "bech32" -> "bech32";
+            case "multihash" -> "multihash";
+            default -> scheme;
+        };
+    }
+
+    private static boolean isBlockchainScheme(String scheme) {
+        return switch (scheme) {
+            case "btc", "ltc", "bch", "ada", "eth", "xrp", "stellar", "eos", "bech32" -> true;
+            default -> false;
+        };
+    }
+
+    private static String qStr(Map<String, Object> q, String key) {
+        Object v = q.get(key);
+        return v == null ? null : String.valueOf(v);
+    }
+
+    /** The PRIMARY slot: the always-present head of the top label. */
+    private static String primary(Characterization ch) {
+        String scheme = ch.scheme();
+        Map<String, Object> q = ch.qualifiers();
+        if (scheme == null) {
+            if (ch.sizeBasis().equals("utf8")) {
+                return "text";
+            }
+            return encodingPrimary(ch.encoding());
+        }
+        switch (scheme) {
+            case "did":
+                return "did:" + qStr(q, "method");
+            case "urn":
+                return "urn:" + qStr(q, "nid");
+            case "gitoid": {
+                String obj = qStr(q, "object");
+                String algo = qStr(q, "algorithm");
+                return "gitoid:" + (obj == null ? "" : obj) + ":" + (algo == null ? "" : algo);
+            }
+            case "swhid": {
+                String obj = qStr(q, "object");
+                return "swh:1:" + (obj == null ? "" : obj);
+            }
+            case "cid": {
+                Object ver = q.get("version");
+                boolean v0 = (ver instanceof Integer i && i == 0) || "0".equals(String.valueOf(ver));
+                return v0 ? "CIDv0" : "CIDv1";
+            }
+            default:
+                return schemePrimaryShort(scheme);
+        }
+    }
+
+    /** The MOD slots (zero or more): silent-default / loud-departure facets. */
+    private static List<String> mods(Characterization ch) {
+        String scheme = ch.scheme();
+        Map<String, Object> q = ch.qualifiers();
+        List<String> mods = new ArrayList<>();
+        if (scheme == null) {
+            return mods;
+        }
+        switch (scheme) {
+            case "cesr": {
+                String algo = qStr(q, "algorithm");
+                if (algo != null) {
+                    if (algo.endsWith(" pubkey")) {
+                        algo = algo.substring(0, algo.length() - " pubkey".length());
+                    }
+                    if (!algo.isEmpty()) {
+                        mods.add(algo);
+                    }
+                }
+                break;
+            }
+            case "ssh": {
+                String algo = qStr(q, "algorithm");
+                if (algo != null) {
+                    mods.add(algo);
+                }
+                break;
+            }
+            case "cid": {
+                Object ver = q.get("version");
+                boolean v0 = (ver instanceof Integer i && i == 0) || "0".equals(String.valueOf(ver));
+                if (!v0) {
+                    String codec = qStr(q, "codec");
+                    if (codec != null) {
+                        mods.add(codec);
+                    }
+                    String hash = qStr(q, "hash");
+                    if (hash != null && !hash.equals("sha2-256")) {
+                        mods.add(hash);
+                    }
+                }
+                break;
+            }
+            case "multihash": {
+                String hash = qStr(q, "hash");
+                if (hash != null && !hash.equals("sha2-256")) {
+                    mods.add(hash);
+                }
+                break;
+            }
+            default:
+                if (isBlockchainScheme(scheme)) {
+                    String network = qStr(q, "network");
+                    if (network != null && !network.equals("mainnet")) {
+                        mods.add(network);
+                    }
+                }
+        }
+        return mods;
+    }
+
+    /** The SIZE slot (zero or one), or null when omitted. */
+    private static String size(Characterization ch) {
+        String scheme = ch.scheme();
+        long sizeBits = ch.sizeBits();
+        if (scheme == null) {
+            if (ch.sizeBasis().equals("utf8")) {
+                return (sizeBits / 8) + "-byte";
+            }
+            return sizeBits + "-bit";
+        }
+        if (scheme.equals("ssh") || scheme.equals("multihash")) {
+            return sizeBits + "-bit";
+        }
+        return null;
+    }
+
+    /**
+     * Projects a characterization into the (top, bottom) label strips (v14).
+     *
+     * <p>{@code top = [fingerprint of ]PRIMARY[, MOD]...[, SIZE]} — ", " joined,
+     * no trailing {@code :} or {@code ...}. The {@code fingerprint of } marker is
+     * reflected in the returned {@code top} so a text-only consumer sees it (the
+     * renderer styles the marker tspan). {@code bottom = ...<suffix>} then
+     * {@code (<note>)} — the bound (now-verified) checksum and the user caption;
+     * empty when neither present.
+     *
+     * @return a 2-element array {@code {top, bottom}}
+     */
+    static String[] renderLabel(Characterization ch, boolean truncated, String suffix, String note) {
+        List<String> slots = new ArrayList<>();
+        slots.add(primary(ch));
+        slots.addAll(mods(ch));
+        String size = size(ch);
+        if (size != null) {
+            slots.add(size);
+        }
+        String top = String.join(", ", slots);
+        if (truncated) {
+            top = "fingerprint of " + top;
+        }
+        String bottom = "";
+        if (suffix != null && !suffix.isEmpty()) {
+            bottom = "..." + suffix;
+        }
+        if (note != null && !note.isEmpty()) {
+            bottom = bottom.isEmpty() ? "(" + note + ")" : bottom + " (" + note + ")";
+        }
+        return new String[] {top, bottom};
+    }
+
     /**
      * Characterize an entropy string into the structured model (spec v13).
      *

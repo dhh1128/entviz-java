@@ -304,6 +304,75 @@ final class Entropy {
         return s.substring(i);
     }
 
+    // ---- base58check verification (v14) ----------------------------------
+
+    /**
+     * Decodes a base58 (Bitcoin alphabet) string to raw bytes, preserving
+     * leading-zero bytes (each leading '1' is a 0x00 byte). Returns null if the
+     * string contains a non-base58 character. Used only for checksum
+     * verification; the visualized core is the original text.
+     */
+    private static byte[] base58DecodeBytes(String s) {
+        java.math.BigInteger n = java.math.BigInteger.ZERO;
+        java.math.BigInteger fifty8 = java.math.BigInteger.valueOf(58);
+        for (int i = 0; i < s.length(); i++) {
+            int v = BASE58_CHARS.indexOf(s.charAt(i));
+            if (v < 0) {
+                return null;
+            }
+            n = n.multiply(fifty8).add(java.math.BigInteger.valueOf(v));
+        }
+        byte[] body;
+        if (n.signum() == 0) {
+            body = new byte[0];
+        } else {
+            byte[] be = n.toByteArray();
+            // BigInteger.toByteArray may prepend a 0x00 sign byte; strip it.
+            int off = (be.length > 1 && be[0] == 0) ? 1 : 0;
+            body = new byte[be.length - off];
+            System.arraycopy(be, off, body, 0, body.length);
+        }
+        int pad = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == '1') {
+                pad++;
+            } else {
+                break;
+            }
+        }
+        byte[] out = new byte[pad + body.length];
+        System.arraycopy(body, 0, out, pad, body.length);
+        return out;
+    }
+
+    /**
+     * True iff {@code s} decodes to {@code payload || checksum} where checksum is
+     * the first 4 bytes of double-SHA256(payload) — the near-universal
+     * base58check construction (Bitcoin/Litecoin legacy). See docs/spec.md
+     * "Checksum verification".
+     */
+    private static boolean base58checkOk(String s) {
+        byte[] raw = base58DecodeBytes(s);
+        if (raw == null || raw.length < 5) {
+            return false;
+        }
+        int plen = raw.length - 4;
+        byte[] payload = new byte[plen];
+        System.arraycopy(raw, 0, payload, 0, plen);
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(md.digest(payload));
+            for (int i = 0; i < 4; i++) {
+                if (digest[i] != raw[plen + i]) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+
     // ---- crypto addresses ------------------------------------------------
 
     static Parsed parseBitcoinAddress(String text) {
@@ -318,6 +387,13 @@ final class Entropy {
                     String suf = new String(bchars, bchars.length - 4, 4);
                     int midLen = len(mid);
                     if (midLen >= 21 && midLen <= 30) {
+                        // v14: the 4-byte double-SHA256 checksum is surfaced as
+                        // the suffix, so it MUST verify. A structural match with a
+                        // bad checksum rejects.
+                        if (!base58checkOk(text)) {
+                            throw new ChecksumException("Bitcoin legacy",
+                                    "Bitcoin legacy address fails its base58check (double-SHA256) checksum");
+                        }
                         return Parsed.of("BTC legacy", Alphabet.BASE58, String.valueOf(first), mid, suf);
                     }
                 }
@@ -325,9 +401,34 @@ final class Entropy {
         }
         String[] pb = matchPrefixBech32(text, new String[] {"bc1", "tb1"}, 39, 69);
         if (pb != null) {
-            return Parsed.of("BTC SegWit", Alphabet.BECH32, pb[0].toLowerCase(Locale.ROOT), pb[1].toLowerCase(Locale.ROOT), null);
+            // Bitcoin SegWit uses bech32 (BIP-173). v14: verify the polymod (the
+            // specific parser previously skipped it) — a bad checksum rejects.
+            // pb[0] is "bc1"/"tb1" (HRP + '1' separator); the polymod HRP is the
+            // HRP alone, so strip the trailing '1' before checking.
+            String prefix = pb[0].toLowerCase(Locale.ROOT);
+            String data = pb[1].toLowerCase(Locale.ROOT);
+            if (!bech32ChecksumValid(rstripOne(prefix), data)) {
+                throw new ChecksumException("Bitcoin segwit",
+                        "Bitcoin segwit address fails its bech32 checksum");
+            }
+            return Parsed.of("BTC SegWit", Alphabet.BECH32, prefix, data, null);
         }
         return null;
+    }
+
+    /** Strips a single trailing {@code '1'} (bech32 HRP/separator split). */
+    private static String rstripOne(String s) {
+        return s.endsWith("1") ? s.substring(0, s.length() - 1) : s;
+    }
+
+    /**
+     * True iff the bech32/bech32m polymod over {@code hrp}+{@code data} is valid
+     * (constant 1 for bech32 or 0x2bc830a3 for bech32m). {@code data} is the
+     * bech32 char string INCLUDING the 6 trailing checksum chars.
+     */
+    private static boolean bech32ChecksumValid(String hrp, String data) {
+        long[] c = bech32ChecksumConst(hrp, data);
+        return c != null && (c[0] == 1 || c[0] == 0x2bc830a3L);
     }
 
     private static String[] matchPrefixBech32(String text, String[] prefixes, int lo, int hi) {
@@ -434,13 +535,28 @@ final class Entropy {
             if (text.startsWith(prefix)) {
                 String rest = text.substring(prefix.length());
                 if (len(rest) == 33 && isBase58(rest)) {
+                    // v14: Litecoin legacy is base58check; verify the double-SHA256
+                    // checksum — a bad checksum rejects.
+                    if (!base58checkOk(text)) {
+                        throw new ChecksumException("Litecoin legacy",
+                                "Litecoin legacy address fails its base58check (double-SHA256) checksum");
+                    }
                     return Parsed.of("LTC legacy", Alphabet.BASE58, prefix, rest, null);
                 }
             }
         }
         String[] pb = matchPrefixBech32(text, new String[] {"ltc1"}, 38, 68);
         if (pb != null) {
-            return Parsed.of("LTC", Alphabet.BECH32, pb[0].toLowerCase(Locale.ROOT), pb[1].toLowerCase(Locale.ROOT), null);
+            // Modern Litecoin "ltc1…" uses bech32. v14: verify the polymod (the
+            // specific parser previously skipped it) — a bad checksum rejects.
+            // pb[0] is "ltc1"; the polymod HRP is "ltc" (strip the separator).
+            String prefix = pb[0].toLowerCase(Locale.ROOT);
+            String data = pb[1].toLowerCase(Locale.ROOT);
+            if (!bech32ChecksumValid(rstripOne(prefix), data)) {
+                throw new ChecksumException("Litecoin",
+                        "Litecoin address fails its bech32 checksum");
+            }
+            return Parsed.of("LTC", Alphabet.BECH32, prefix, data, null);
         }
         return null;
     }
@@ -466,11 +582,75 @@ final class Entropy {
             if ((first == 'p' || first == 'q' || first == 'P' || first == 'Q') && rchars.length == 42) {
                 String body = new String(rchars, 1, rchars.length - 1);
                 if (isBech32Either(body)) {
+                    // v14: verify the 40-bit CashAddr BCH checksum (a DIFFERENT
+                    // code from bech32's polymod). The checksum HRP is the prefix
+                    // WITHOUT the colon, defaulting to "bitcoincash" for a bare
+                    // q…/p… address; the payload (INCLUDING its 8 trailing
+                    // checksum chars) is the full `rest`. A structural CashAddr
+                    // match with a bad checksum is REJECTED.
+                    String hrp = (prefix == null ? "bitcoincash:" : prefix)
+                            .replace(":", "").toLowerCase(Locale.ROOT);
+                    if (!cashaddrVerify(hrp, rest)) {
+                        throw new ChecksumException("Bitcoin Cash",
+                                "Bitcoin Cash address fails its CashAddr checksum");
+                    }
                     return Parsed.of("BCH", Alphabet.BECH32, prefix, rest.toLowerCase(Locale.ROOT), null);
                 }
             }
         }
         return null;
+    }
+
+    // ---- CashAddr 40-bit BCH checksum (v14) ------------------------------
+
+    /**
+     * CashAddr generator rows of the 40-bit BCH code used by Bitcoin Cash — a
+     * DIFFERENT code from bech32's 30-bit BIP-173 polymod.
+     */
+    private static final long[] CASHADDR_GEN = {
+            0x98f2bc8e61L, 0x79b76d99e2L, 0xf33e5fb3c4L, 0xae2eabe2a8L, 0x1e4f43e470L,
+    };
+
+    /**
+     * The 40-bit BCH checksum polymod used by Bitcoin Cash CashAddr (NOT the
+     * bech32 polymod). {@code values} is a list of 5-bit ints; valid iff this
+     * returns 0. A {@code long} holds the 40-bit accumulator.
+     */
+    private static long cashaddrPolymod(int[] values) {
+        long c = 1;
+        for (int d : values) {
+            long c0 = c >> 35;
+            c = ((c & 0x07ffffffffL) << 5) ^ d;
+            for (int i = 0; i < 5; i++) {
+                if (((c0 >> i) & 1) != 0) {
+                    c ^= CASHADDR_GEN[i];
+                }
+            }
+        }
+        return c ^ 1;
+    }
+
+    /**
+     * True iff CashAddr {@code payload} (bech32-charset body INCLUDING the
+     * trailing 8 checksum chars) carries a valid BCH checksum under {@code
+     * prefix} (lowercase, e.g. {@code "bitcoincash"} / {@code "bchtest"}).
+     */
+    private static boolean cashaddrVerify(String prefix, String payload) {
+        String low = payload.toLowerCase(Locale.ROOT);
+        int[] values = new int[prefix.length() + 1 + low.length()];
+        int p = 0;
+        for (int i = 0; i < prefix.length(); i++) {
+            values[p++] = prefix.charAt(i) & 0x1f;
+        }
+        values[p++] = 0;
+        for (int i = 0; i < low.length(); i++) {
+            int idx = BECH32_CHARS.indexOf(low.charAt(i));
+            if (idx < 0) {
+                return false;
+            }
+            values[p++] = idx;
+        }
+        return cashaddrPolymod(values) == 0;
     }
 
     static Parsed parseStellarAddress(String text) {
@@ -613,10 +793,16 @@ final class Entropy {
         }
         String upper = text.toUpperCase(Locale.ROOT);
         if (!upper.substring(4, 6).equals("00")) {
+            // Missing the reserved "00" -> not a clear LEI; fall through so a bare
+            // 20-char base36 string can still be recognized as an encoding.
             return null;
         }
         if (!leiChecksumOk(upper)) {
-            return null;
+            // v14: 20 base36 chars WITH the reserved "00" is an unambiguous LEI
+            // match, and the MOD 97-10 check digits are surfaced as the bound
+            // suffix — so a bad checksum REJECTS rather than falling through to a
+            // generic base36 encoding. See docs/spec.md "Checksum verification".
+            throw new ChecksumException("LEI", "LEI fails its MOD 97-10 checksum");
         }
         return Parsed.of("LEI", Alphabet.BASE36, null, upper.substring(0, 18), upper.substring(18));
     }
@@ -834,6 +1020,14 @@ final class Entropy {
                 String suffix = new String(dchars, dchars.length - 6, 6);
                 return Parsed.of("bech32", Alphabet.BECH32, hrp + "1", core, suffix);
             }
+            // v14: a `<hrp>1<data>` string with 8+ bech32 chars is a clear
+            // bech32 structural match, and the 6-char checksum is surfaced as the
+            // bound suffix — so an invalid polymod REJECTS rather than falling
+            // through to a bare bech32 encoding (which would render an address
+            // that fails its own checksum). Mirrors the specific bc1/ltc1
+            // parsers. See docs/spec.md "Checksum verification".
+            throw new ChecksumException("bech32",
+                    "bech32 address fails its bech32 checksum");
         }
         return null;
     }

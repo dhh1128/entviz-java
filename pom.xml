@@ -6,7 +6,7 @@
 
   <groupId>io.github.dhh1128</groupId>
   <artifactId>entviz</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
   <packaging>jar</packaging>
 
   <name>entviz</name>

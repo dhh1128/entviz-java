@@ -138,7 +138,6 @@ final class Pipeline {
         }
 
         String core;
-        String typeName;
         Alphabet alphabet;
         String prefix = null;
         String suffix = null;
@@ -147,22 +146,13 @@ final class Pipeline {
         String fallbackCore = Core.b64urlEncode(rawInput.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         if (parsed == null) {
             core = fallbackCore;
-            typeName = "txt(" + rawInput.codePointCount(0, rawInput.length()) + ")->b64url";
             alphabet = Alphabet.BASE64URL;
         } else {
             core = parsed.core();
-            typeName = parsed.typeName();
             alphabet = parsed.alphabet();
             prefix = parsed.prefix();
             suffix = parsed.suffix();
             prefixSemantic = parsed.prefixSemantic();
-            int coreLen = core.codePointCount(0, core.length());
-            switch (typeName) {
-                case "hex" -> typeName = "hex(" + coreLen + ")";
-                case "base64" -> typeName = "b64(" + coreLen + ")";
-                case "base64url" -> typeName = "b64url(" + coreLen + ")";
-                default -> { /* unchanged */ }
-            }
         }
 
         Entropy.TokenizeResult tr = Entropy.tokenizeEntropy(core, alphabet);
@@ -563,9 +553,19 @@ final class Pipeline {
         byte[] second = Core.secondDigest(core);
         drawColorBar(s, primary, second, style, barW, boundingH, cellTextPx);
 
-        // labels
+        // labels — v14: the visible top strip is a pure projection of the v13
+        // characterization through one grammar (renderLabel), NOT the old
+        // per-parser typeName/prefix fusing. `ch` is the same characterization
+        // already emitted as data-* attributes above. renderLabel prepends the
+        // "fingerprint of " marker when truncated; drawLabelStrips re-applies it
+        // structurally (bold dark-red tspan), so we pass the marker-free top.
+        String labelTop = Characterize.renderLabel(ch, isTruncated, null, null)[0];
+        final String TRUNC_MARKER = "fingerprint of ";
+        if (isTruncated && labelTop.startsWith(TRUNC_MARKER)) {
+            labelTop = labelTop.substring(TRUNC_MARKER.length());
+        }
         drawLabelStrips(s, gridLeft, gridRight, gridTop, gridBottom, nucleusH,
-                typeName, prefix, suffix, labelTextPx, truncatedBytes, sanitized);
+                labelTop, suffix, labelTextPx, truncatedBytes, sanitized);
 
         // borders
         appendBorderLine(s, MARGIN, MARGIN + 0.5, boundingW - MARGIN, MARGIN + 0.5);
@@ -852,20 +852,12 @@ final class Pipeline {
     }
 
     private static void drawLabelStrips(StringBuilder s, double gridLeft, double gridRight, double gridTop,
-            double gridBottom, double nucleusH, String typeName, String prefix, String suffix, double textPx,
+            double gridBottom, double nucleusH, String topText, String suffix, double textPx,
             int truncatedBytes, String note) {
         String fontSizeAttr = "font-size=\"" + n(textPx) + "\"";
-        String restText;
-        if (!typeName.isEmpty()) {
-            restText = typeName + ":";
-            if (prefix != null) {
-                restText += " " + prefix + "...";
-            }
-        } else if (prefix != null) {
-            restText = prefix + "...";
-        } else {
-            restText = "";
-        }
+        // v14: `topText` is the projected top-strip label (marker-free); the
+        // "fingerprint of " marker is applied structurally below when truncated.
+        String restText = topText;
         double topCy = gridTop - nucleusH / 2.0;
         s.append("<g data-channel=\"label-top\">");
         if (truncatedBytes >= 0) {

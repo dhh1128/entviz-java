@@ -107,12 +107,21 @@ class EntropyTest {
 
     @Test
     void leiChecksumValidates() {
-        Parsed p = Entropy.parse("549300O2THAREICZTHE9");
-        // Whether or not this specific value checksums, the parser must not throw.
-        // Use a known-good LEI core length expectation if matched.
-        if (p != null && "LEI".equals(p.typeName())) {
-            assertEquals(18, p.core().length());
-        }
+        // A valid LEI (Bloomberg) passes the MOD 97-10 check and parses as LEI
+        // with an 18-char core (LOU + "00" + 12-char body) and a 2-char suffix.
+        Parsed p = Entropy.parse("5493001KJTIIGC8Y1R12");
+        assertNotNull(p);
+        assertEquals("LEI", p.typeName());
+        assertEquals(18, p.core().length());
+        assertEquals("12", p.suffix());
+    }
+
+    @Test
+    void leiBadChecksumRejects() {
+        // v14: 20 base36 chars WITH the reserved "00" is an unambiguous LEI
+        // match, so a bad MOD 97-10 check digit pair REJECTS (throws) rather than
+        // falling through to a generic base36 encoding.
+        assertThrows(ChecksumException.class, () -> Entropy.parse("5493001KJTIIGC8Y1R13"));
     }
 
     // ---- DID -------------------------------------------------------------
