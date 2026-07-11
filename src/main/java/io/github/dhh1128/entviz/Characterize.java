@@ -274,18 +274,48 @@ final class Characterize {
         return parts;
     }
 
-    // ---- Label projection (spec v14) ----------------------------------------
+    // ---- Label projection (spec v15) ----------------------------------------
     //
     // The visible top/bottom label strips are a PURE PROJECTION of the eight
     // characterization fields through one grammar — no per-parser string fusing.
     // Every implementation renders the same strips by running this same
     // projection over the shared fields.
     //
-    //   top    = [fingerprint of ]PRIMARY[, MOD]...[, SIZE]
+    //   top    = [+hash ]PRIMARY[, MOD]...[, SIZE][, PREFIX]
     //   bottom = ...<suffix>[ (<note>)]
     //
     // Slot separator is ", " (comma-space); no trailing ':' or '...'. See
-    // reviews/v14-label-redesign.md and characterize.py render_label.
+    // docs/spec.md -> "Label strips" and characterize.py render_label.
+
+    // v15: large-input truncation marker. Prepended (bold dark-red, by the
+    // renderer) to the top label when the text channel is a
+    // head/fingerprint-middle/tail readout rather than a linear scan. Reads as
+    // "the value, augmented with a hash of the parts that didn't fit" — the
+    // leading "+" is additive, not substitutive. Replaces v14's "fingerprint
+    // of ". Kept in sync with Pipeline (which splits on it to style the marker
+    // tspan). See docs/spec.md and this.i:v15pfxlbl.
+    static final String TRUNC_MARKER = "+hash ";
+
+    // ASCII elision marker for a truncated prefix slot (matches the bottom
+    // strip's "...<suffix>" convention; no Unicode ellipsis, so the
+    // printable-ASCII / unicode guard is satisfied and cross-implementation font
+    // behavior is uniform).
+    private static final String PREFIX_ELLIPSIS = "...";
+
+    // Minimum number of LEADING prefix characters kept when the prefix is
+    // truncated. The label-line budget can leave a big prefix (only SSH's
+    // structural header is ever this long) almost no room; without a floor it
+    // would collapse to a bare "..." that shows nothing. 4 is enough to read
+    // "there is a real prefix here" without materially widening the strip.
+    private static final int PREFIX_MIN_HEAD = 4;
+
+    // v15: fixed monospace advance (em) used to size the top strip's character
+    // budget for prefix truncation. A spec constant — NOT the renderer's real
+    // font metric — so all implementations compute the same integer budget and
+    // the Tier-A label string is reproducible. 0.6 em is the conventional
+    // monospace advance; the raster is unaffected (labels are excluded from the
+    // Tier-B raster).
+    static final double LABEL_ADVANCE_EM = 0.6;
 
     // Bare-encoding display shortenings for the PRIMARY slot when scheme is null
     // and the basis is decoded (the encoding name IS the primary). Mirrors the
@@ -392,7 +422,13 @@ final class Characterize {
             case "ssh": {
                 String algo = qStr(q, "algorithm");
                 if (algo != null) {
-                    mods.add(algo);
+                    // v15: shorten the ECDSA curve to its common short name for
+                    // the label — "ecdsa-nistp256" -> "ecdsa-p256" (there is no
+                    // rival non-NIST "p256"; the algorithm word stays, only the
+                    // redundant standards-body prefix drops). ASCII replace, so
+                    // no locale concern. The data-qualifiers `algorithm` field
+                    // keeps the faithful SSH curve id ("ecdsa-nistp256").
+                    mods.add(algo.replace("nistp", "p"));
                 }
                 break;
             }
@@ -446,18 +482,75 @@ final class Characterize {
     }
 
     /**
-     * Projects a characterization into the (top, bottom) label strips (v14).
+     * The literal front prefix that was stripped from the visualized core, or
+     * {@code null}.
      *
-     * <p>{@code top = [fingerprint of ]PRIMARY[, MOD]...[, SIZE]} — ", " joined,
-     * no trailing {@code :} or {@code ...}. The {@code fingerprint of } marker is
-     * reflected in the returned {@code top} so a text-only consumer sees it (the
-     * renderer styles the marker tspan). {@code bottom = ...<suffix>} then
-     * {@code (<note>)} — the bound (now-verified) checksum and the user caption;
-     * empty when neither present.
+     * <p>This is a leading {@code bind="none"} part — a presentation sigil peeled
+     * off the front ({@code 0x}, {@code bc1}, {@code cosmos1}, Stellar {@code G},
+     * the SSH structural header, …). A folded identity prefix ({@code
+     * bind="fold"}: did/urn/gitoid/swhid) is NOT returned — it is already shown
+     * verbatim as the PRIMARY slot, so echoing it again would double it. A {@code
+     * bind="core"} leading part (e.g. a CESR derivation code, in the first cell)
+     * is likewise not a stripped prefix. So the slot fires iff {@code
+     * parts[0].bind == "none"}.
+     */
+    private static String strippedPrefix(Characterization ch) {
+        List<Part> parts = ch.parts();
+        if (parts != null && !parts.isEmpty() && "none".equals(parts.get(0).bind())) {
+            return parts.get(0).text();
+        }
+        return null;
+    }
+
+    /**
+     * Truncate the literal prefix slot to {@code avail} characters with a
+     * trailing {@code ...} elision marker.
+     *
+     * <p>The prefix is the sole ELASTIC label element (v15): PRIMARY/MOD/SIZE are
+     * never truncated. When the prefix does not fit, it is cut to {@code <head> +
+     * "..."}; the head length is floored at {@link #PREFIX_MIN_HEAD} so a long
+     * prefix on a tight line (only SSH's structural header hits this) still shows
+     * a few leading characters rather than collapsing to a bare {@code ...}.
+     */
+    private static String fitPrefix(String prefix, int avail) {
+        if (prefix.length() <= avail) {
+            return prefix;
+        }
+        int keep = Math.max(avail - PREFIX_ELLIPSIS.length(), PREFIX_MIN_HEAD);
+        return prefix.substring(0, keep) + PREFIX_ELLIPSIS;
+    }
+
+    /**
+     * Projects a characterization into the (top, bottom) label strips (v15),
+     * with no prefix-truncation budget (full prefix shown).
      *
      * @return a 2-element array {@code {top, bottom}}
      */
     static String[] renderLabel(Characterization ch, boolean truncated, String suffix, String note) {
+        return renderLabel(ch, truncated, suffix, note, null);
+    }
+
+    /**
+     * Projects a characterization into the (top, bottom) label strips (v15).
+     *
+     * <p>{@code top = [+hash ]PRIMARY[, MOD]...[, SIZE][, <prefix>]} — ", "
+     * joined, no trailing {@code :}. The {@code +hash } marker is reflected in
+     * the returned {@code top} so a text-only consumer sees it (the renderer
+     * styles the marker tspan). The trailing {@code <prefix>} slot (v15) echoes a
+     * front prefix that was stripped from the visualized core (a {@code
+     * bind="none"} leading part); it is the only slot that may be truncated (to
+     * {@code lineChars}) and may then end in {@code ...}. Fold-prefix schemes
+     * (did/urn/gitoid/swhid) show their prefix as PRIMARY and get no extra slot.
+     * {@code bottom = ...<suffix>} then {@code (<note>)} — the bound
+     * (now-verified) checksum and the user caption; empty when neither present.
+     *
+     * @param lineChars the monospace character budget the grid leaves for the top
+     *     strip, used only to truncate the elastic prefix slot; {@code null} = do
+     *     not truncate (show the full prefix).
+     * @return a 2-element array {@code {top, bottom}}
+     */
+    static String[] renderLabel(Characterization ch, boolean truncated, String suffix, String note,
+            Integer lineChars) {
         List<String> slots = new ArrayList<>();
         slots.add(primary(ch));
         slots.addAll(mods(ch));
@@ -465,9 +558,24 @@ final class Characterize {
         if (size != null) {
             slots.add(size);
         }
+
+        String prefix = strippedPrefix(ch);
+        if (prefix != null && !prefix.isEmpty()) {
+            if (lineChars != null) {
+                // Budget left for the prefix = the line budget minus the marker
+                // and the fixed PRIMARY/MOD/SIZE core (which never truncate) and
+                // the ", " that joins the prefix slot.
+                int markerLen = truncated ? TRUNC_MARKER.length() : 0;
+                int coreLen = String.join(", ", slots).length();
+                int avail = lineChars - markerLen - coreLen - ", ".length();
+                prefix = fitPrefix(prefix, avail);
+            }
+            slots.add(prefix);
+        }
+
         String top = String.join(", ", slots);
         if (truncated) {
-            top = "fingerprint of " + top;
+            top = TRUNC_MARKER + top;
         }
         String bottom = "";
         if (suffix != null && !suffix.isEmpty()) {

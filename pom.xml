@@ -6,11 +6,11 @@
 
   <groupId>io.github.dhh1128</groupId>
   <artifactId>entviz</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
   <packaging>jar</packaging>
 
   <name>entviz</name>
-  <description>Java implementation of entviz (spec v10): visualize high-entropy values as comparable SVG diagrams.</description>
+  <description>Java implementation of entviz (spec v15): visualize high-entropy values as comparable SVG diagrams.</description>
   <url>https://github.com/dhh1128/entviz-java</url>
   <inceptionYear>2026</inceptionYear>
 

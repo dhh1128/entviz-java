@@ -553,14 +553,23 @@ final class Pipeline {
         byte[] second = Core.secondDigest(core);
         drawColorBar(s, primary, second, style, barW, boundingH, cellTextPx);
 
-        // labels — v14: the visible top strip is a pure projection of the v13
+        // labels — v15: the visible top strip is a pure projection of the v13
         // characterization through one grammar (renderLabel), NOT the old
         // per-parser typeName/prefix fusing. `ch` is the same characterization
         // already emitted as data-* attributes above. renderLabel prepends the
-        // "fingerprint of " marker when truncated; drawLabelStrips re-applies it
+        // "+hash " marker when truncated; drawLabelStrips re-applies it
         // structurally (bold dark-red tspan), so we pass the marker-free top.
-        String labelTop = Characterize.renderLabel(ch, isTruncated, null, null)[0];
-        final String TRUNC_MARKER = "fingerprint of ";
+        //
+        // v15: the top strip gains a trailing slot echoing the stripped front
+        // prefix (0x, bc1, cosmos1, the SSH header, …). The prefix is the only
+        // elastic element and is truncated to the character budget the grid
+        // leaves on the label line: lineChars = floor(gridW / (labelPx *
+        // LABEL_ADVANCE_EM)). LABEL_ADVANCE_EM is a fixed spec constant (NOT the
+        // renderer's real font metric) so every implementation truncates
+        // identically and the Tier-A label string is reproducible.
+        int labelLineChars = (int) Math.floor(gridW / (labelTextPx * Characterize.LABEL_ADVANCE_EM));
+        String labelTop = Characterize.renderLabel(ch, isTruncated, null, null, labelLineChars)[0];
+        final String TRUNC_MARKER = Characterize.TRUNC_MARKER;
         if (isTruncated && labelTop.startsWith(TRUNC_MARKER)) {
             labelTop = labelTop.substring(TRUNC_MARKER.length());
         }
@@ -855,8 +864,8 @@ final class Pipeline {
             double gridBottom, double nucleusH, String topText, String suffix, double textPx,
             int truncatedBytes, String note) {
         String fontSizeAttr = "font-size=\"" + n(textPx) + "\"";
-        // v14: `topText` is the projected top-strip label (marker-free); the
-        // "fingerprint of " marker is applied structurally below when truncated.
+        // v15: `topText` is the projected top-strip label (marker-free); the
+        // "+hash " marker is applied structurally below when truncated.
         String restText = topText;
         double topCy = gridTop - nucleusH / 2.0;
         s.append("<g data-channel=\"label-top\">");
@@ -864,7 +873,7 @@ final class Pipeline {
             s.append("<text x=\"").append(n(gridLeft)).append("\" y=\"").append(n(topCy))
                     .append("\" fill=\"#666666\" ").append(fontSizeAttr)
                     .append(" dominant-baseline=\"central\"><tspan fill=\"#a00000\" font-weight=\"bold\">"
-                            + "fingerprint of </tspan>")
+                            + "+hash </tspan>")
                     .append(escText(restText)).append("</text>");
         } else {
             s.append("<text x=\"").append(n(gridLeft)).append("\" y=\"").append(n(topCy))
