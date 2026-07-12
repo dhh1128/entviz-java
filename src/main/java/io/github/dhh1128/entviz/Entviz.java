@@ -20,7 +20,7 @@ public final class Entviz {
     private Entviz() {
     }
 
-    /** The entviz spec level this library implements (e.g. {@code "v10"}). */
+    /** The entviz spec level this library implements (emitted as {@code data-entviz-version}). */
     public static final String SPEC_VERSION = Core.SPEC_VERSION;
 
     /** This library's own version stamp (emitted as {@code data-entviz-lib}). */
@@ -54,7 +54,7 @@ public final class Entviz {
 
     /**
      * Characterizes {@code entropy} into the structured {@link Characterization}
-     * (spec v13) without rendering. The eight fields are the same reporting-only
+     * without rendering. The eight fields are the same reporting-only
      * recognition {@link #render(String)} emits as {@code data-*} attributes;
      * this API exposes them directly, matching the public {@code characterize}
      * surface of the sibling implementations (entviz-rs, entviz-js, entviz-go,

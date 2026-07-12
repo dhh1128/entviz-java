@@ -118,7 +118,7 @@ class EntropyTest {
 
     @Test
     void leiBadChecksumRejects() {
-        // v14: 20 base36 chars WITH the reserved "00" is an unambiguous LEI
+        // 20 base36 chars WITH the reserved "00" is an unambiguous LEI
         // match, so a bad MOD 97-10 check digit pair REJECTS (throws) rather than
         // falling through to a generic base36 encoding.
         assertThrows(ChecksumException.class, () -> Entropy.parse("5493001KJTIIGC8Y1R13"));

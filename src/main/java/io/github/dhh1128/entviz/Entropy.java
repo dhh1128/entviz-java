@@ -304,7 +304,7 @@ final class Entropy {
         return s.substring(i);
     }
 
-    // ---- base58check verification (v14) ----------------------------------
+    // ---- base58check verification ----------------------------------------
 
     /**
      * Decodes a base58 (Bitcoin alphabet) string to raw bytes, preserving
@@ -387,8 +387,8 @@ final class Entropy {
                     String suf = new String(bchars, bchars.length - 4, 4);
                     int midLen = len(mid);
                     if (midLen >= 21 && midLen <= 30) {
-                        // v14: the 4-byte double-SHA256 checksum is surfaced as
-                        // the suffix, so it MUST verify. A structural match with a
+                        // The 4-byte double-SHA256 checksum is surfaced as the
+                        // suffix, so it MUST verify. A structural match with a
                         // bad checksum rejects.
                         if (!base58checkOk(text)) {
                             throw new ChecksumException("Bitcoin legacy",
@@ -401,8 +401,8 @@ final class Entropy {
         }
         String[] pb = matchPrefixBech32(text, new String[] {"bc1", "tb1"}, 39, 69);
         if (pb != null) {
-            // Bitcoin SegWit uses bech32 (BIP-173). v14: verify the polymod (the
-            // specific parser previously skipped it) — a bad checksum rejects.
+            // Bitcoin SegWit uses bech32 (BIP-173). Verify the polymod — a bad
+            // checksum rejects.
             // pb[0] is "bc1"/"tb1" (HRP + '1' separator); the polymod HRP is the
             // HRP alone, so strip the trailing '1' before checking.
             String prefix = pb[0].toLowerCase(Locale.ROOT);
@@ -535,7 +535,7 @@ final class Entropy {
             if (text.startsWith(prefix)) {
                 String rest = text.substring(prefix.length());
                 if (len(rest) == 33 && isBase58(rest)) {
-                    // v14: Litecoin legacy is base58check; verify the double-SHA256
+                    // Litecoin legacy is base58check; verify the double-SHA256
                     // checksum — a bad checksum rejects.
                     if (!base58checkOk(text)) {
                         throw new ChecksumException("Litecoin legacy",
@@ -547,8 +547,8 @@ final class Entropy {
         }
         String[] pb = matchPrefixBech32(text, new String[] {"ltc1"}, 38, 68);
         if (pb != null) {
-            // Modern Litecoin "ltc1…" uses bech32. v14: verify the polymod (the
-            // specific parser previously skipped it) — a bad checksum rejects.
+            // Modern Litecoin "ltc1…" uses bech32. Verify the polymod — a bad
+            // checksum rejects.
             // pb[0] is "ltc1"; the polymod HRP is "ltc" (strip the separator).
             String prefix = pb[0].toLowerCase(Locale.ROOT);
             String data = pb[1].toLowerCase(Locale.ROOT);
@@ -582,7 +582,7 @@ final class Entropy {
             if ((first == 'p' || first == 'q' || first == 'P' || first == 'Q') && rchars.length == 42) {
                 String body = new String(rchars, 1, rchars.length - 1);
                 if (isBech32Either(body)) {
-                    // v14: verify the 40-bit CashAddr BCH checksum (a DIFFERENT
+                    // Verify the 40-bit CashAddr BCH checksum (a DIFFERENT
                     // code from bech32's polymod). The checksum HRP is the prefix
                     // WITHOUT the colon, defaulting to "bitcoincash" for a bare
                     // q…/p… address; the payload (INCLUDING its 8 trailing
@@ -601,7 +601,7 @@ final class Entropy {
         return null;
     }
 
-    // ---- CashAddr 40-bit BCH checksum (v14) ------------------------------
+    // ---- CashAddr 40-bit BCH checksum ------------------------------------
 
     /**
      * CashAddr generator rows of the 40-bit BCH code used by Bitcoin Cash — a
@@ -798,7 +798,7 @@ final class Entropy {
             return null;
         }
         if (!leiChecksumOk(upper)) {
-            // v14: 20 base36 chars WITH the reserved "00" is an unambiguous LEI
+            // 20 base36 chars WITH the reserved "00" is an unambiguous LEI
             // match, and the MOD 97-10 check digits are surfaced as the bound
             // suffix — so a bad checksum REJECTS rather than falling through to a
             // generic base36 encoding. See docs/spec.md "Checksum verification".
@@ -1020,7 +1020,7 @@ final class Entropy {
                 String suffix = new String(dchars, dchars.length - 6, 6);
                 return Parsed.of("bech32", Alphabet.BECH32, hrp + "1", core, suffix);
             }
-            // v14: a `<hrp>1<data>` string with 8+ bech32 chars is a clear
+            // A `<hrp>1<data>` string with 8+ bech32 chars is a clear
             // bech32 structural match, and the 6-char checksum is surfaced as the
             // bound suffix — so an invalid polymod REJECTS rather than falling
             // through to a bare bech32 encoding (which would render an address
@@ -1326,7 +1326,7 @@ final class Entropy {
     record TokenizeResult(List<Token> tokens, boolean truncated) {
     }
 
-    /** Tokenizes entropy with v6+ large-input handling. */
+    /** Tokenizes entropy, applying large-input (head/middle/tail) handling. */
     static TokenizeResult tokenizeEntropy(String core, Alphabet alphabet) {
         int tokenLen = 24 / alphabet.bitsPerChar();
         int nBytes = coreByteLength(core, alphabet);

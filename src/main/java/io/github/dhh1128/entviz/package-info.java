@@ -1,6 +1,6 @@
 /**
- * Java implementation of entviz (spec v10): render high-entropy values as
- * comparable SVG fingerprints.
+ * Java implementation of entviz: render high-entropy values as comparable SVG
+ * fingerprints.
  *
  * <p>The public entry point is {@link io.github.dhh1128.entviz.Entviz}. The
  * canonical algorithm and spec live in

@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Entropy characterization model (spec v13).
+ * Entropy characterization model.
  *
  * <p>Faithful port of the certified reference {@code characterize.py}. The
  * parser ({@link Entropy#parse}) produces a {@link Parsed} display record whose
@@ -34,7 +34,7 @@ final class Characterize {
     private Characterize() {
     }
 
-    // Closed role enum (spec v13). Nothing outside this set may appear.
+    // Closed role enum. Nothing outside this set may appear.
     static final String ROLE_KEY = "key";
     static final String ROLE_SIGNATURE = "signature";
     static final String ROLE_DIGEST = "digest";
@@ -274,7 +274,7 @@ final class Characterize {
         return parts;
     }
 
-    // ---- Label projection (spec v15) ----------------------------------------
+    // ---- Label projection ---------------------------------------------------
     //
     // The visible top/bottom label strips are a PURE PROJECTION of the eight
     // characterization fields through one grammar — no per-parser string fusing.
@@ -287,13 +287,13 @@ final class Characterize {
     // Slot separator is ", " (comma-space); no trailing ':' or '...'. See
     // docs/spec.md -> "Label strips" and characterize.py render_label.
 
-    // v15: large-input truncation marker. Prepended (bold dark-red, by the
+    // Large-input truncation marker. Prepended (bold dark-red, by the
     // renderer) to the top label when the text channel is a
     // head/fingerprint-middle/tail readout rather than a linear scan. Reads as
     // "the value, augmented with a hash of the parts that didn't fit" — the
-    // leading "+" is additive, not substitutive. Replaces v14's "fingerprint
-    // of ". Kept in sync with Pipeline (which splits on it to style the marker
-    // tspan). See docs/spec.md and this.i:v15pfxlbl.
+    // leading "+" is additive, not substitutive. Kept in sync with Pipeline
+    // (which splits on it to style the marker tspan). See docs/spec.md and
+    // this.i:v15pfxlbl.
     static final String TRUNC_MARKER = "+hash ";
 
     // ASCII elision marker for a truncated prefix slot (matches the bottom
@@ -309,7 +309,7 @@ final class Characterize {
     // "there is a real prefix here" without materially widening the strip.
     private static final int PREFIX_MIN_HEAD = 4;
 
-    // v15: fixed monospace advance (em) used to size the top strip's character
+    // Fixed monospace advance (em) used to size the top strip's character
     // budget for prefix truncation. A spec constant — NOT the renderer's real
     // font metric — so all implementations compute the same integer budget and
     // the Tier-A label string is reproducible. 0.6 em is the conventional
@@ -318,9 +318,8 @@ final class Characterize {
     static final double LABEL_ADVANCE_EM = 0.6;
 
     // Bare-encoding display shortenings for the PRIMARY slot when scheme is null
-    // and the basis is decoded (the encoding name IS the primary). Mirrors the
-    // pre-v14 pipeline renaming base64->b64, base64url->b64url; the other
-    // alphabet names show verbatim.
+    // and the basis is decoded (the encoding name IS the primary). Renames
+    // base64->b64 and base64url->b64url; the other alphabet names show verbatim.
     private static String encodingPrimary(String enc) {
         return switch (enc) {
             case "base64" -> "b64";
@@ -422,7 +421,7 @@ final class Characterize {
             case "ssh": {
                 String algo = qStr(q, "algorithm");
                 if (algo != null) {
-                    // v15: shorten the ECDSA curve to its common short name for
+                    // Shorten the ECDSA curve to its common short name for
                     // the label — "ecdsa-nistp256" -> "ecdsa-p256" (there is no
                     // rival non-NIST "p256"; the algorithm word stays, only the
                     // redundant standards-body prefix drops). ASCII replace, so
@@ -506,7 +505,7 @@ final class Characterize {
      * Truncate the literal prefix slot to {@code avail} characters with a
      * trailing {@code ...} elision marker.
      *
-     * <p>The prefix is the sole ELASTIC label element (v15): PRIMARY/MOD/SIZE are
+     * <p>The prefix is the sole ELASTIC label element: PRIMARY/MOD/SIZE are
      * never truncated. When the prefix does not fit, it is cut to {@code <head> +
      * "..."}; the head length is floored at {@link #PREFIX_MIN_HEAD} so a long
      * prefix on a tight line (only SSH's structural header hits this) still shows
@@ -521,7 +520,7 @@ final class Characterize {
     }
 
     /**
-     * Projects a characterization into the (top, bottom) label strips (v15),
+     * Projects a characterization into the (top, bottom) label strips,
      * with no prefix-truncation budget (full prefix shown).
      *
      * @return a 2-element array {@code {top, bottom}}
@@ -531,12 +530,12 @@ final class Characterize {
     }
 
     /**
-     * Projects a characterization into the (top, bottom) label strips (v15).
+     * Projects a characterization into the (top, bottom) label strips.
      *
      * <p>{@code top = [+hash ]PRIMARY[, MOD]...[, SIZE][, <prefix>]} — ", "
      * joined, no trailing {@code :}. The {@code +hash } marker is reflected in
      * the returned {@code top} so a text-only consumer sees it (the renderer
-     * styles the marker tspan). The trailing {@code <prefix>} slot (v15) echoes a
+     * styles the marker tspan). The trailing {@code <prefix>} slot echoes a
      * front prefix that was stripped from the visualized core (a {@code
      * bind="none"} leading part); it is the only slot that may be truncated (to
      * {@code lineChars}) and may then end in {@code ...}. Fold-prefix schemes
@@ -588,7 +587,7 @@ final class Characterize {
     }
 
     /**
-     * Characterize an entropy string into the structured model (spec v13).
+     * Characterize an entropy string into the structured model.
      *
      * @param raw    the stripped entropy input (already {@code strip()}-ed by the caller)
      * @param parsed the parse record for {@code raw}, or null for the UTF-8 fallback

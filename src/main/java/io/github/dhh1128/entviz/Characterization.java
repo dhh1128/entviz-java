@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The structured eight-field entropy characterization (spec v13).
+ * The structured eight-field entropy characterization.
  *
  * <p>This is the public, reporting-only recognition of an entropy string along
  * independent axes, so downstream consumers read structured fields instead of

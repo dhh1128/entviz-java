@@ -11,7 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Full render pipeline: entropy string → SVG string (spec v10).
+ * Full render pipeline: entropy string → SVG string.
  *
  * <p>Faithful port of {@code pipeline.rs} / {@code pipeline.go} (themselves
  * ports of {@code pipeline.py} + {@code renderer.py} + {@code shapes.py}).
@@ -213,13 +213,15 @@ final class Pipeline {
             usedCells[ci] = true;
         }
 
-        // --- per-cell text sizes ---
+        // --- cell text sizes (keyed on the input alphabet, applied to every
+        // cell of it including a short final token; the Crockford middle cells
+        // are sized from their own 5-char alphabet below) ---
         double cellTextPt = alphabet.bitsPerChar() == 4 ? Math.rint(fontSizePt * 0.75) : fontSizePt;
         double cellTextPx = cellTextPt * DPI / 72.0;
         double labelTextPx = Math.rint(fontSizePt * 0.75) * DPI / 72.0;
         double fpMiddleTextPx = Math.rint(fontSizePt * 0.80) * DPI / 72.0;
 
-        // --- fingerprint-edge cells (v10) ---
+        // --- fingerprint-edge cells ---
         boolean[] fpEdgeCells = new boolean[cellCount];
         if (usedCells[0]) {
             fpEdgeCells[0] = true;
@@ -251,7 +253,7 @@ final class Pipeline {
 
         String truncAttr = isTruncated ? " data-truncated=\"true\"" : "";
 
-        // v13 entropy characterization: reporting-only structured fields emitted
+        // entropy characterization: reporting-only structured fields emitted
         // as root data-* attributes (no ink). Null scheme/role -> empty string;
         // qualifiers/parts as compact JSON (XML-escaped). See Characterize.
         Characterization ch = Characterize.characterize(rawInput, parsed, fallbackCore);
@@ -553,20 +555,20 @@ final class Pipeline {
         byte[] second = Core.secondDigest(core);
         drawColorBar(s, primary, second, style, barW, boundingH, cellTextPx);
 
-        // labels — v15: the visible top strip is a pure projection of the v13
-        // characterization through one grammar (renderLabel), NOT the old
-        // per-parser typeName/prefix fusing. `ch` is the same characterization
-        // already emitted as data-* attributes above. renderLabel prepends the
-        // "+hash " marker when truncated; drawLabelStrips re-applies it
-        // structurally (bold dark-red tspan), so we pass the marker-free top.
+        // labels: the visible top strip is a pure projection of the
+        // characterization through one grammar (renderLabel), NOT a per-parser
+        // typeName/prefix fusing. `ch` is the same characterization already
+        // emitted as data-* attributes above. renderLabel prepends the "+hash "
+        // marker when truncated; drawLabelStrips re-applies it structurally
+        // (bold dark-red tspan), so we pass the marker-free top.
         //
-        // v15: the top strip gains a trailing slot echoing the stripped front
-        // prefix (0x, bc1, cosmos1, the SSH header, …). The prefix is the only
-        // elastic element and is truncated to the character budget the grid
-        // leaves on the label line: lineChars = floor(gridW / (labelPx *
-        // LABEL_ADVANCE_EM)). LABEL_ADVANCE_EM is a fixed spec constant (NOT the
-        // renderer's real font metric) so every implementation truncates
-        // identically and the Tier-A label string is reproducible.
+        // The top strip has a trailing slot echoing the stripped front prefix
+        // (0x, bc1, cosmos1, the SSH header, …). The prefix is the only elastic
+        // element and is truncated to the character budget the grid leaves on
+        // the label line: lineChars = floor(gridW / (labelPx * LABEL_ADVANCE_EM)).
+        // LABEL_ADVANCE_EM is a fixed spec constant (NOT the renderer's real font
+        // metric) so every implementation truncates identically and the Tier-A
+        // label string is reproducible.
         int labelLineChars = (int) Math.floor(gridW / (labelTextPx * Characterize.LABEL_ADVANCE_EM));
         String labelTop = Characterize.renderLabel(ch, isTruncated, null, null, labelLineChars)[0];
         final String TRUNC_MARKER = Characterize.TRUNC_MARKER;
@@ -864,7 +866,7 @@ final class Pipeline {
             double gridBottom, double nucleusH, String topText, String suffix, double textPx,
             int truncatedBytes, String note) {
         String fontSizeAttr = "font-size=\"" + n(textPx) + "\"";
-        // v15: `topText` is the projected top-strip label (marker-free); the
+        // `topText` is the projected top-strip label (marker-free); the
         // "+hash " marker is applied structurally below when truncated.
         String restText = topText;
         double topCy = gridTop - nucleusH / 2.0;
