@@ -4,13 +4,17 @@
 [![Release](https://github.com/dhh1128/entviz-java/actions/workflows/release.yml/badge.svg)](https://github.com/dhh1128/entviz-java/actions/workflows/release.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.dhh1128/entviz.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.dhh1128/entviz)
 [![javadoc](https://javadoc.io/badge2/io.github.dhh1128/entviz/javadoc.svg)](https://javadoc.io/doc/io.github.dhh1128/entviz)
-[![Spec](https://img.shields.io/badge/entviz%20spec-v10-informational)](https://github.com/dhh1128/entviz/blob/main/docs/spec.md)
+[![Spec](https://img.shields.io/badge/entviz%20spec-v15-informational)](https://github.com/dhh1128/entviz/blob/main/docs/spec.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Java implementation of [entviz](https://github.com/dhh1128/entviz) (spec **v10**)
+Java implementation of [entviz](https://github.com/dhh1128/entviz) (spec **v15**)
 — visualize high-entropy values as comparable SVG diagrams.
 
-## Status: certified against the v10 conformance corpus ✅
+## Part of the entviz family
+
+entviz is defined by a language-independent [specification](https://github.com/dhh1128/entviz/blob/main/docs/spec.md), with conformant implementations in Python (reference), Rust, TypeScript/JS + React, Java, and Go — all passing the same shared conformance corpus. See the **[directory of implementations](https://github.com/dhh1128/entviz#implementations)**, browse the [spec & docs site](https://dhh1128.github.io/entviz/), or **[try it live in the browser](https://dhh1128.github.io/entviz-js/)**.
+
+## Status: certified against the v15 conformance corpus ✅
 
 A full, self-contained implementation that passes the shared conformance corpus
 at **Tier A** (render model) **+ Tier B** (canonical raster) for every render
