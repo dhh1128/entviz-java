@@ -148,6 +148,15 @@ final class Entropy {
                 new CesrCode("1AAE", "Ed448 sig", 156), new CesrCode("1AAH", "X25519 100 cipher 24 salt", 100),
                 new CesrCode("1AAI", "secp256r1 nt pubkey", 48), new CesrCode("1AAJ", "secp256r1 pub/enc key", 48),
                 new CesrCode("1AAR", "FN-DSA-512 sig", 892), new CesrCode("1AAQ", "FN-DSA-512 pubkey", 1200),
+                // Dater (MtrDex.DateTime): an ISO-8601 datetime with `:`->`c`,
+                // `.`->`d`, `+`->`p` substitutions, so the whole qb64 is
+                // base64url. Recognized only to LABEL it correctly (not `raw`); a
+                // datetime is low-entropy and directly human-readable, so entviz
+                // does NOT treat it as a comparison target and characterize
+                // assigns it NO role (see this.i:idxs1gs0). It is a Matter code
+                // with a fixed 4-char prefix + fixed size, so it fits this flat
+                // table with no special path (unlike the Indexer below).
+                new CesrCode("1AAG", "datetime", 36),
         };
         if (text.isEmpty()) {
             return null;
@@ -155,23 +164,70 @@ final class Entropy {
         int length = len(text);
         char first = text.charAt(0);
 
-        CesrCode[] items;
+        CesrCode[] items = null;
         if (first == '0' && anyLen(two, length)) {
             items = two;
         } else if (first == '1' && anyLen(four, length)) {
             items = four;
         } else if (first != '0' && first != '1' && anyLen(one, length)) {
             items = one;
-        } else {
-            return null;
         }
-        for (CesrCode it : items) {
-            if (text.startsWith(it.code()) && length == it.total() && isBase64urlNopad(text)) {
-                return Parsed.of("CESR " + it.label(), Alphabet.BASE64URL, null, text, null);
+        if (items != null) {
+            for (CesrCode it : items) {
+                if (text.startsWith(it.code()) && length == it.total() && isBase64urlNopad(text)) {
+                    return Parsed.of("CESR " + it.label(), Alphabet.BASE64URL, null, text, null);
+                }
+            }
+        }
+
+        // Matter did not match — try the Indexer table (indexed signatures).
+        // Deliberately AFTER Matter so (code, length) decides Matter-vs-Indexer,
+        // never the leading char alone. Match keys on the hard code + full size
+        // (fs) only; the variable index chars are left in the core (like the
+        // Matter derivation code above, they are bound by the fingerprint and
+        // rendered in the cells). See issue #36, this.i:idxs1gs0.
+        if (anyLen(INDEXER, length)) {
+            for (CesrCode it : INDEXER) {
+                if (length == it.total() && text.startsWith(it.code()) && isBase64urlNopad(text)) {
+                    return Parsed.of("CESR " + it.label(), Alphabet.BASE64URL, null, text, null);
+                }
             }
         }
         return null;
     }
+
+    // CESR Indexer code table (keri.core.coring.IdrDex) — the indexed signatures
+    // a KEL carries (controller/witness sigs). STRUCTURALLY DIFFERENT from the
+    // Matter tables: each qb64 is `hard-code + index + material`, so the chars
+    // AFTER the hard code vary with the signature's index and CANNOT be matched
+    // as a fixed leading substring. Recognition keys on (hard-code, full-size
+    // `fs`) ONLY; the index chars stay in the core like any other body chars
+    // (and so still drive the cells and the fingerprint). Every variant of one
+    // algorithm — current-only ("Crt"), "Big" (2-char hard code, wider index) —
+    // collapses to a single label. Ported wholesale from keripy's IdrDex.
+    // Matter-vs-Indexer is decided by (code, length), never by leading char
+    // alone: `A` is a Matter seed at 44 but an Indexer sig at 88, `0A`/`0B` are
+    // Matter codes at 24/88 but Ed448 indexer sigs at 156 — length always
+    // separates them, and parseCesr tries Matter first, then this table. The
+    // `total` field holds the Indexer `fs` (full size). See this.i:idxs1gs0.
+    private static final CesrCode[] INDEXER = {
+            new CesrCode("A", "Ed25519 idx sig", 88),    // Ed25519_Sig
+            new CesrCode("B", "Ed25519 idx sig", 88),    // Ed25519_Crt_Sig
+            new CesrCode("C", "secp256k1 idx sig", 88),  // ECDSA_256k1_Sig
+            new CesrCode("D", "secp256k1 idx sig", 88),  // ECDSA_256k1_Crt_Sig
+            new CesrCode("E", "secp256r1 idx sig", 88),  // ECDSA_256r1_Sig
+            new CesrCode("F", "secp256r1 idx sig", 88),  // ECDSA_256r1_Crt_Sig
+            new CesrCode("0A", "Ed448 idx sig", 156),    // Ed448_Sig
+            new CesrCode("0B", "Ed448 idx sig", 156),    // Ed448_Crt_Sig
+            new CesrCode("2A", "Ed25519 idx sig", 92),   // Ed25519_Big_Sig
+            new CesrCode("2B", "Ed25519 idx sig", 92),   // Ed25519_Big_Crt_Sig
+            new CesrCode("2C", "secp256k1 idx sig", 92), // ECDSA_256k1_Big_Sig
+            new CesrCode("2D", "secp256k1 idx sig", 92), // ECDSA_256k1_Big_Crt_Sig
+            new CesrCode("2E", "secp256r1 idx sig", 92), // ECDSA_256r1_Big_Sig
+            new CesrCode("2F", "secp256r1 idx sig", 92), // ECDSA_256r1_Big_Crt_Sig
+            new CesrCode("3A", "Ed448 idx sig", 160),    // Ed448_Big_Sig
+            new CesrCode("3B", "Ed448 idx sig", 160),    // Ed448_Big_Crt_Sig
+    };
 
     private static boolean anyLen(CesrCode[] items, int length) {
         for (CesrCode x : items) {

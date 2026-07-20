@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           repository: dhh1128/entviz
-          ref: v0.15.0
+          ref: v0.15.2
           path: entviz-ref
           sparse-checkout: |
             compliance
@@ -106,7 +106,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           repository: dhh1128/entviz
-          ref: v0.15.0
+          ref: v0.15.2
           path: entviz-ref
           sparse-checkout: |
             compliance

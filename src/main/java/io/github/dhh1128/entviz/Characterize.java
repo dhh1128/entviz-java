@@ -58,8 +58,24 @@ final class Characterize {
     private static final String[] CESR_DIGEST_MARKERS =
             {"blake3", "blake2b", "blake2s", "sha3", "sha2", "sha"};
 
+    // CESR primitives that are recognized but carry NO role in the closed enum
+    // {key, signature, digest, address, identifier}. A Dater ("datetime") is a
+    // low-entropy, directly human-readable temporal value — entviz recognizes it
+    // only to LABEL it correctly (not `raw`), NOT to endorse visualizing it as
+    // entropy. It MUST short-circuit to role=null here rather than fall through
+    // to the ROLE_KEY default below. Checked BEFORE the sig/digest markers so a
+    // future temporal primitive whose name happened to contain one of those
+    // substrings stays role-less. See this.i:idxs1gs0 and docs/spec.md role
+    // principle.
+    private static final String[] CESR_NONENTROPY_MARKERS = {"datetime"};
+
     private static String cesrRole(String name) {
         String low = name.toLowerCase(Locale.ROOT);
+        for (String m : CESR_NONENTROPY_MARKERS) {
+            if (low.contains(m)) {
+                return null;
+            }
+        }
         if (low.contains("sig")) {
             return ROLE_SIGNATURE;
         }
